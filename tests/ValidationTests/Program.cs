@@ -136,6 +136,73 @@ AppLog.Error("unit-test", new Exception($"Server=localhost;User=root;Password={m
 var logText = File.Exists(AppLog.LogFile) ? File.ReadAllText(AppLog.LogFile) : "";
 Ok(logText.Contains("Password=***") && !logText.Contains(marker, StringComparison.Ordinal), "log file redacts connection-string passwords");
 
+// ---- Room states: the state classes must behave exactly like the original switch they replaced ------
+static string? LegacyCheck(string role, string from, string to)
+{
+    if (from == to) return $"Room is already {Labels.Of(to)}.";
+    if (from == RoomStatus.Occupied) return "An occupied room changes status only through check-out.";
+
+    return (from, to) switch
+    {
+        (RoomStatus.Available, RoomStatus.Dirty) when role is Roles.Receptionist or Roles.Admin => null,
+        (RoomStatus.Available or RoomStatus.Dirty or RoomStatus.Cleaning, RoomStatus.OutOfService) when role is Roles.Receptionist or Roles.Admin => null,
+        (RoomStatus.OutOfService, RoomStatus.Dirty) when role == Roles.Admin => null,
+        (RoomStatus.OutOfService, _) => "Only an admin can clear a room that is Out of Service, and it returns as Dirty so it is cleaned first.",
+        (_, RoomStatus.Occupied) => "A room becomes Occupied only through check-in.",
+        (_, RoomStatus.Cleaning) => "A room moves to Cleaning when a housekeeper starts its cleaning task.",
+        (_, RoomStatus.Available) => "A room becomes Available only when housekeeping completes its cleaning task.",
+        _ => "That status change is not allowed."
+    };
+}
+
+var stateRoles = new[] { Roles.Admin, Roles.Receptionist, Roles.Housekeeper, Roles.Guest, "Nobody" };
+var stateNames = RoomStatus.All.Append("Mystery").ToArray();
+var stateMismatches = 0;
+foreach (var stateRole in stateRoles)
+    foreach (var fromStatus in stateNames)
+        foreach (var toStatus in stateNames)
+            if (LegacyCheck(stateRole, fromStatus, toStatus) != RoomRules.CheckManual(stateRole, fromStatus, toStatus)) stateMismatches++;
+Ok(stateMismatches == 0, $"room state classes match the original rules for all {stateRoles.Length * stateNames.Length * stateNames.Length} role/status combinations");
+
+// ---- Entities: encapsulation, inheritance, polymorphism and field-level errors ----------------------
+var newGuest = Guest.Register("Ana Cruz", "ana@example.com", "", "Quezon City", "Filipino", "Passport", "p1234567", 2);
+Ok(newGuest.IsNew && newGuest.FullName == "Ana Cruz" && newGuest.IdDocument == "P1234567", "Guest.Register builds a validated, normalised guest");
+
+Person asPerson = newGuest;
+var receptionist = new StaffMember(7, "RECEP1", "Rita Santos", "rita@example.com", "", Roles.Receptionist, true);
+Ok(asPerson.Kind == "Guest" && receptionist.Kind == Roles.Receptionist && asPerson.DisplayName != receptionist.DisplayName,
+   "Person subclasses answer Kind and DisplayName for themselves");
+Ok(receptionist.CanManageRooms && !new StaffMember(8, "HK1", "Hana Lim", "", "12345", Roles.Housekeeper, true).CanManageRooms, "staff role decides room permissions");
+
+try { Guest.Register("A", "", "12345", "", "", "", "", 1); Ok(false, "short name rejected (no error)"); }
+catch (FieldValidationException ex) { Ok(ex.Field == "Full name", "invalid name reports its own field -> " + ex.Message); }
+try { Guest.Register("Ana Cruz", "", "", "", "", "", "", 1); Ok(false, "missing contact rejected (no error)"); }
+catch (FieldValidationException ex) { Ok(ex.Field == "Phone", "missing phone/email reports the phone field -> " + ex.Message); }
+try { Guest.Register("Ana Cruz", "ana@example.com", "", "", "", "", "", 0); Ok(false, "zero days rejected (no error)"); }
+catch (FieldValidationException ex) { Ok(ex.Field == "Number of days to stay", "invalid stay length reports its own field -> " + ex.Message); }
+Throws(() => Guest.Register("Ana Cruz", "not-an-email", "", "", "", "", "", 1), "field errors are still DomainExceptions, so existing handling keeps working");
+
+var g5a = new Guest(5, null, "Ana Cruz", "", "12345", "", "", "", "", 1, false);
+var g5b = new Guest(5, null, "Ana C.", "", "12345", "", "", "", "", 1, false);
+var s5 = new StaffMember(5, "S5", "Sam Reyes", "", "12345", Roles.Admin, true);
+Ok(g5a.Equals(g5b) && !g5a.Equals(s5) && !newGuest.Equals(Guest.Register("Ana Cruz", "ana@example.com", "", "", "", "", "", 2)),
+   "entities are equal by kind and id; unsaved ones only equal themselves");
+
+var resv = Reservation.Create(1, 2, DateTime.Today.AddDays(1), DateTime.Today.AddDays(4), 2, 100m, "  late arrival ", confirmed: false);
+Ok(resv.Nights == 3 && resv.Total == 300m && resv.Status == ResStatus.Pending && resv.Notes == "late arrival", "Reservation.Create computes nights, total and status");
+Ok(resv.Overlaps(DateTime.Today.AddDays(3), DateTime.Today.AddDays(6)) && !resv.Overlaps(DateTime.Today.AddDays(4), DateTime.Today.AddDays(6)), "reservation overlap follows the availability rule");
+resv.Confirm();
+Ok(resv.Status == ResStatus.Confirmed, "a pending reservation can be confirmed");
+Throws(() => resv.Confirm(), "confirming twice is rejected");
+resv.Cancel();
+Throws(() => resv.Cancel(), "cancelling twice is rejected");
+Throws(() => Reservation.Create(1, 2, DateTime.Today.AddDays(-1), DateTime.Today, 1, 100m, null, false), "Reservation.Create reuses the reservation date rules");
+
+var occupiedRoom = new Room(3, "101", "Main", 1, 1, "Standard", 2, 1500m, RoomStatus.Occupied, false);
+Ok(occupiedRoom.State.Name == RoomStatus.Occupied && occupiedRoom.CheckManualChange(Roles.Admin, RoomStatus.Available) != null, "a room asks its state whether a manual change is allowed");
+Ok(occupiedRoom.WhyNotReservable(DateTime.Today.AddDays(2), 3, DateTime.Today) != null && occupiedRoom.WhyNotReservable(DateTime.Today.AddDays(2), 2, DateTime.Today) is null,
+   "a room reports why it cannot be reserved");
+
 Console.WriteLine(fails == 0 ? "ALL PASSED" : $"{fails} FAILED");
 return fails;
 

@@ -31,24 +31,12 @@ public static class RoomRules
 {
     public static string? CheckManual(string role, string from, string to)
     {
-        if (from == to) return $"Room is already {Labels.Of(to)}.";
-        if (from == RoomStatus.Occupied) return "An occupied room changes status only through check-out.";
-
-        return (from, to) switch
-        {
-            (RoomStatus.Available, RoomStatus.Dirty) when role is Roles.Receptionist or Roles.Admin => null,
-            (RoomStatus.Available or RoomStatus.Dirty or RoomStatus.Cleaning, RoomStatus.OutOfService) when role is Roles.Receptionist or Roles.Admin => null,
-            (RoomStatus.OutOfService, RoomStatus.Dirty) when role == Roles.Admin => null,
-            (RoomStatus.OutOfService, _) => "Only an admin can clear a room that is Out of Service, and it returns as Dirty so it is cleaned first.",
-            (_, RoomStatus.Occupied) => "A room becomes Occupied only through check-in.",
-            (_, RoomStatus.Cleaning) => "A room moves to Cleaning when a housekeeper starts its cleaning task.",
-            (_, RoomStatus.Available) => "A room becomes Available only when housekeeping completes its cleaning task.",
-            _ => "That status change is not allowed."
-        };
+        // Each room state (see RoomState) decides for itself which manual changes it allows.
+        return RoomState.For(from).CheckManualChange(role, to);
     }
 }
 
-public sealed class RoomService(Session s)
+public sealed class RoomService(Session s) : IRoomService
 {
     const string RoomSelect =
         "SELECT r.Id, r.RoomNumber, r.Building, r.`Floor` AS Floor, r.RoomTypeId, t.Name AS RoomType, r.Capacity, r.Rate, r.Amenities, r.Description, r.Status, " +

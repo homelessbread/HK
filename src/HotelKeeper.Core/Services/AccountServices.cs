@@ -71,7 +71,7 @@ public sealed record GuestRow(int Id, int? UserId, string FullName, string Email
 
 public sealed record GuestCreated(int GuestId, string Username, string TemporaryPassword);
 
-public sealed class GuestService(Session s)
+public sealed class GuestService(Session s) : IGuestService
 {
     const string Select =
         "SELECT g.Id, g.UserId, g.FullName, g.Email, g.Phone, g.Address, g.Nationality, " +
@@ -84,29 +84,15 @@ public sealed class GuestService(Session s)
     internal static async Task<GuestCreated> CreateGuestCoreAsync(Db db, Session? by, string fullName, string email, string phone,
         string address, string nationality, string idDocumentType, string idDocument, int stayDuration, string username, string? password, bool mustChange)
     {
-        fullName = Input.Required(fullName, "Full name", 2, InputLimits.FullName);
-        email = Input.Email(email, required: false);
-        phone = Input.Phone(phone, required: false);
-        address = Input.Optional(address, "Address", InputLimits.Address);
-        nationality = Input.Optional(nationality, "Nationality", InputLimits.Nationality);
-        idDocumentType = Input.Optional(idDocumentType, "ID document type", 40);
-        idDocument = Input.Optional(idDocument, "ID document", InputLimits.IdDocument);
-        if (stayDuration < 1) throw new DomainException("Stay duration must be a positive whole number of days.");
-        if (!string.IsNullOrEmpty(idDocument))
-        {
-            // Try to map type name to enum
-            var type = HotelKeeper.Validation.Input.IdDocumentType.Other;
-            if (idDocumentType.Contains("Passport", StringComparison.OrdinalIgnoreCase)) type = HotelKeeper.Validation.Input.IdDocumentType.Passport;
-            else if (idDocumentType.Contains("National", StringComparison.OrdinalIgnoreCase)) type = HotelKeeper.Validation.Input.IdDocumentType.NationalId;
-            else if (idDocumentType.Contains("Driver", StringComparison.OrdinalIgnoreCase)) type = HotelKeeper.Validation.Input.IdDocumentType.DriverLicense;
-            else if (idDocumentType.Contains("UMID", StringComparison.OrdinalIgnoreCase)) type = HotelKeeper.Validation.Input.IdDocumentType.IdCard;
-            else if (idDocumentType.Contains("PhilHealth", StringComparison.OrdinalIgnoreCase)) type = HotelKeeper.Validation.Input.IdDocumentType.Other;
-            else if (idDocumentType.Contains("Postal", StringComparison.OrdinalIgnoreCase)) type = HotelKeeper.Validation.Input.IdDocumentType.Other;
-            else if (idDocumentType.Contains("Voter", StringComparison.OrdinalIgnoreCase)) type = HotelKeeper.Validation.Input.IdDocumentType.Other;
-            idDocument = Input.IdDocumentNumber(idDocument, type);
-        }
-        if (phone.Length == 0 && email.Length == 0)
-            throw new DomainException("Enter a phone number or an email address.");
+        // The Guest entity owns the field rules; each failure names the field it belongs to.
+        var guest = Guest.Register(fullName, email, phone, address, nationality, idDocumentType, idDocument, stayDuration);
+        fullName = guest.FullName;
+        email = guest.Email;
+        phone = guest.Phone;
+        address = guest.Address;
+        nationality = guest.Nationality;
+        idDocumentType = guest.IdDocumentType;
+        idDocument = guest.IdDocument;
 
         int? userId = null;
         if (!string.IsNullOrEmpty(password) || !string.IsNullOrEmpty(username))
