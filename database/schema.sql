@@ -23,18 +23,20 @@ CREATE TABLE IF NOT EXISTS Users (
 );
 
 CREATE TABLE IF NOT EXISTS Guests (
-    Id         INT AUTO_INCREMENT PRIMARY KEY,
-    UserId     INT          NOT NULL UNIQUE,
-    FullName   VARCHAR(100) NOT NULL,
-    Email      VARCHAR(120) NOT NULL DEFAULT '',
-    Phone      VARCHAR(40)  NOT NULL DEFAULT '',
-    Address    VARCHAR(255) NOT NULL DEFAULT '',
-    Nationality VARCHAR(60) NOT NULL DEFAULT '',
-    IdDocument VARCHAR(80)  NOT NULL DEFAULT '',
-    Notes      VARCHAR(255) NOT NULL DEFAULT '',
-    IsArchived TINYINT(1)   NOT NULL DEFAULT 0,
-    CreatedAt  DATETIME     NOT NULL DEFAULT (UTC_TIMESTAMP()),
-    CreatedById INT         NULL,
+    Id              INT AUTO_INCREMENT PRIMARY KEY,
+    UserId          INT          NULL UNIQUE,
+    FullName        VARCHAR(100) NOT NULL,
+    Email           VARCHAR(120) NOT NULL DEFAULT '',
+    Phone           VARCHAR(40)  NOT NULL DEFAULT '',
+    Address         VARCHAR(255) NOT NULL DEFAULT '',
+    Nationality     VARCHAR(60)  NOT NULL DEFAULT '',
+    IdDocumentType  VARCHAR(40)  NOT NULL DEFAULT '',
+    IdDocument      VARCHAR(80)  NOT NULL DEFAULT '',
+    StayDuration    INT          NOT NULL DEFAULT 0,
+    Notes           VARCHAR(255) NOT NULL DEFAULT '',
+    IsArchived      TINYINT(1)   NOT NULL DEFAULT 0,
+    CreatedAt       DATETIME     NOT NULL DEFAULT (UTC_TIMESTAMP()),
+    CreatedById     INT          NULL,
     FOREIGN KEY (UserId)      REFERENCES Users (Id) ON DELETE RESTRICT,
     FOREIGN KEY (CreatedById) REFERENCES Users (Id) ON DELETE RESTRICT
 );

@@ -31,11 +31,20 @@ public static class DatabaseSetup
         // 2. Additive migrations for databases created by an older version of the schema (MySQL has no ADD COLUMN IF NOT EXISTS).
         await using (var m = await Db.BeginAsync())
         {
-            if (await m.ScalarAsync<int>(
-                    "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Stays' AND COLUMN_NAME='ExpectedCheckOutAt'") == 0)
+            if (await ColumnMissingAsync(m, "Stays", "ExpectedCheckOutAt"))
                 await m.ExecAsync("ALTER TABLE Stays ADD COLUMN ExpectedCheckOutAt DATETIME NULL AFTER ExpectedCheckOutDate");
+            // Guest registration writes the ID-document dropdown type and the stay duration in days.
+            if (await ColumnMissingAsync(m, "Guests", "IdDocumentType"))
+                await m.ExecAsync("ALTER TABLE Guests ADD COLUMN IdDocumentType VARCHAR(40) NOT NULL DEFAULT '' AFTER Nationality");
+            if (await ColumnMissingAsync(m, "Guests", "StayDuration"))
+                await m.ExecAsync("ALTER TABLE Guests ADD COLUMN StayDuration INT NOT NULL DEFAULT 0 AFTER IdDocument");
             await m.CommitAsync();
         }
+
+        static async Task<bool> ColumnMissingAsync(Db db, string table, string column) =>
+            await db.ScalarAsync<int>(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=@t AND COLUMN_NAME=@c",
+                new { t = table, c = column }) == 0;
 
         // 3. Starting data, once.
         await using var d = await Db.BeginAsync();
@@ -77,7 +86,7 @@ public static class DatabaseSetup
             await d.ExecAsync("INSERT INTO RequestableItems (Name, ItemCategory, MaxQuantity, Rule) VALUES (@name,@cat,@max,@rule)", new { name, cat, max, rule });
 
         var order = 1;
-        foreach (var label in new[] { "Change bed linens", "Clean bathroom", "Replace towels", "Replenish toiletries and supplies", "Vacuum / mop floors", "Check minibar and amenities" })
+        foreach (var label in new[] { "Change bed sheets", "Replace pillowcases", "Replace blankets", "Sanitize bathroom", "Refill toiletries", "Empty trash", "Dust furniture", "Sweep and mop floors", "Clean mirrors and windows", "Check room items and equipment" })
             await d.ExecAsync("INSERT INTO ChecklistTemplate (Label, SortOrder) VALUES (@l,@o)", new { l = label, o = order++ });
 
         foreach (var (k, v, desc) in new[]

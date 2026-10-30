@@ -61,69 +61,105 @@ public static class AuthService
         var err = Passwords.Validate(password);
         if (err != null) throw new DomainException(err);
         await using var db = await Db.BeginAsync();
-        await GuestService.CreateGuestCoreAsync(db, null, fullName, email, phone, "", "", "", username, password, mustChange: false);
+        await GuestService.CreateGuestCoreAsync(db, null, fullName, email, phone, "", "", "", "", 1, username, password, mustChange: false);
         await db.CommitAsync();
     }
 }
 
-public sealed record GuestRow(int Id, int UserId, string FullName, string Email, string Phone, string Address, string Nationality,
-    string IdDocument, string Username, bool IsActive, bool IsArchived, string CurrentRoom, int StayCount, DateTime CreatedAt);
+public sealed record GuestRow(int Id, int? UserId, string FullName, string Email, string Phone, string Address, string Nationality,
+    string IdDocumentType, string IdDocument, int StayDuration, string Username, bool IsActive, bool IsArchived, string CurrentRoom, int StayCount, DateTime CreatedAt);
 
 public sealed record GuestCreated(int GuestId, string Username, string TemporaryPassword);
 
 public sealed class GuestService(Session s)
 {
     const string Select =
-        "SELECT g.Id, g.UserId, g.FullName, g.Email, g.Phone, g.Address, g.Nationality, g.IdDocument, u.Username, u.IsActive, g.IsArchived, " +
+        "SELECT g.Id, g.UserId, g.FullName, g.Email, g.Phone, g.Address, g.Nationality, " +
+        "COALESCE(g.IdDocumentType,'') AS IdDocumentType, g.IdDocument, COALESCE(g.StayDuration,0) AS StayDuration, " +
+        "COALESCE(u.Username,'') AS Username, COALESCE(u.IsActive,1) AS IsActive, g.IsArchived, " +
         "COALESCE((SELECT rm.RoomNumber FROM Stays st JOIN Rooms rm ON rm.Id=st.RoomId WHERE st.GuestId=g.Id AND st.CheckOutAt IS NULL LIMIT 1),'') AS CurrentRoom, " +
         "(SELECT COUNT(*) FROM Stays st WHERE st.GuestId=g.Id) AS StayCount, g.CreatedAt " +
-        "FROM Guests g JOIN Users u ON u.Id=g.UserId ";
+        "FROM Guests g LEFT JOIN Users u ON u.Id=g.UserId ";
 
     internal static async Task<GuestCreated> CreateGuestCoreAsync(Db db, Session? by, string fullName, string email, string phone,
-        string address, string nationality, string idDocument, string username, string? password, bool mustChange)
+        string address, string nationality, string idDocumentType, string idDocument, int stayDuration, string username, string? password, bool mustChange)
     {
         fullName = Input.Required(fullName, "Full name", 2, InputLimits.FullName);
         email = Input.Email(email, required: false);
         phone = Input.Phone(phone, required: false);
         address = Input.Optional(address, "Address", InputLimits.Address);
         nationality = Input.Optional(nationality, "Nationality", InputLimits.Nationality);
+        idDocumentType = Input.Optional(idDocumentType, "ID document type", 40);
         idDocument = Input.Optional(idDocument, "ID document", InputLimits.IdDocument);
+        if (stayDuration < 1) throw new DomainException("Stay duration must be a positive whole number of days.");
+        if (!string.IsNullOrEmpty(idDocument))
+        {
+            // Try to map type name to enum
+            var type = HotelKeeper.Validation.Input.IdDocumentType.Other;
+            if (idDocumentType.Contains("Passport", StringComparison.OrdinalIgnoreCase)) type = HotelKeeper.Validation.Input.IdDocumentType.Passport;
+            else if (idDocumentType.Contains("National", StringComparison.OrdinalIgnoreCase)) type = HotelKeeper.Validation.Input.IdDocumentType.NationalId;
+            else if (idDocumentType.Contains("Driver", StringComparison.OrdinalIgnoreCase)) type = HotelKeeper.Validation.Input.IdDocumentType.DriverLicense;
+            else if (idDocumentType.Contains("UMID", StringComparison.OrdinalIgnoreCase)) type = HotelKeeper.Validation.Input.IdDocumentType.IdCard;
+            else if (idDocumentType.Contains("PhilHealth", StringComparison.OrdinalIgnoreCase)) type = HotelKeeper.Validation.Input.IdDocumentType.Other;
+            else if (idDocumentType.Contains("Postal", StringComparison.OrdinalIgnoreCase)) type = HotelKeeper.Validation.Input.IdDocumentType.Other;
+            else if (idDocumentType.Contains("Voter", StringComparison.OrdinalIgnoreCase)) type = HotelKeeper.Validation.Input.IdDocumentType.Other;
+            idDocument = Input.IdDocumentNumber(idDocument, type);
+        }
         if (phone.Length == 0 && email.Length == 0)
             throw new DomainException("Enter a phone number or an email address.");
 
-        username = (username ?? "").Trim();
-        if (username.Length == 0)
+        int? userId = null;
+        if (!string.IsNullOrEmpty(password) || !string.IsNullOrEmpty(username))
         {
-            do { username = Input.UsernameFromName(fullName); }
-            while (await db.ScalarAsync<int>("SELECT COUNT(*) FROM Users WHERE Username=@u", new { u = username.ToUpperInvariant() }) > 0);
-        }
-        username = Input.Username(username).ToUpperInvariant();
-        if (await db.ScalarAsync<int>("SELECT COUNT(*) FROM Users WHERE Username=@u", new { u = username }) > 0)
-            throw new DomainException("That username is already taken.");
+            username = (username ?? "").Trim();
+            if (username.Length == 0)
+            {
+                do { username = Input.UsernameFromName(fullName); }
+                while (await db.ScalarAsync<int>("SELECT COUNT(*) FROM Users WHERE Username=@u", new { u = username.ToUpperInvariant() }) > 0);
+            }
+            username = Input.Username(username).ToUpperInvariant();
+            if (await db.ScalarAsync<int>("SELECT COUNT(*) FROM Users WHERE Username=@u", new { u = username }) > 0)
+                throw new DomainException("That username is already taken.");
 
-        if (password is null) password = Passwords.Generate();
+            if (password is null) password = Passwords.Generate();
+            else
+            {
+                var passwordError = Passwords.Validate(password);
+                if (passwordError != null) throw new DomainException(passwordError);
+            }
+
+            var roleId = await db.ScalarAsync<int>("SELECT Id FROM Roles WHERE Name=@n", new { n = Roles.Guest });
+            userId = await db.InsertAsync(
+                "INSERT INTO Users (Username, FullName, Email, Phone, PasswordHash, RoleId, MustChangePassword, CreatedAt) VALUES (@u,@f,@e,@p,@h,@r,@m,UTC_TIMESTAMP())",
+                new { u = username, f = fullName, e = email, p = phone, h = Passwords.Hash(password), r = roleId, m = mustChange });
+        }
         else
         {
-            var passwordError = Passwords.Validate(password);
-            if (passwordError != null) throw new DomainException(passwordError);
+            username = "";
+            password = "";
         }
 
-        var roleId = await db.ScalarAsync<int>("SELECT Id FROM Roles WHERE Name=@n", new { n = Roles.Guest });
-        var userId = await db.InsertAsync(
-            "INSERT INTO Users (Username, FullName, Email, Phone, PasswordHash, RoleId, MustChangePassword, CreatedAt) VALUES (@u,@f,@e,@p,@h,@r,@m,UTC_TIMESTAMP())",
-            new { u = username, f = fullName, e = email, p = phone, h = Passwords.Hash(password), r = roleId, m = mustChange });
         var guestId = await db.InsertAsync(
-            "INSERT INTO Guests (UserId, FullName, Email, Phone, Address, Nationality, IdDocument, CreatedById, CreatedAt) VALUES (@u,@f,@e,@p,@a,@n,@i,@c,UTC_TIMESTAMP())",
-            new { u = userId, f = fullName, e = email, p = phone, a = address, n = nationality, i = idDocument, c = by?.UserId });
-        await Audit.LogAsync(db, by, "Guest registered", "Guest", guestId, $"{fullName} ({username})");
-        return new GuestCreated(guestId, username, password);
+            "INSERT INTO Guests (UserId, FullName, Email, Phone, Address, Nationality, IdDocumentType, IdDocument, StayDuration, CreatedById, CreatedAt) VALUES (@u,@f,@e,@p,@a,@n,@dt,@i,@sd,@c,UTC_TIMESTAMP())",
+            new { u = userId, f = fullName, e = email, p = phone, a = address, n = nationality, dt = idDocumentType, i = idDocument, sd = stayDuration, c = by?.UserId });
+        await Audit.LogAsync(db, by, "Guest registered", "Guest", guestId, fullName);
+        return new GuestCreated(guestId, username ?? "", password ?? "");
+    }
+
+    public async Task<GuestCreated> RegisterAsync(string fullName, string email, string phone, string address, string nationality, string idDocumentType, string idDocument, int stayDuration, string? username = null)
+    {
+        s.Require(Roles.Receptionist, Roles.Admin);
+        await using var db = await Db.BeginAsync();
+        var r = await CreateGuestCoreAsync(db, s, fullName, email, phone, address, nationality, idDocumentType, idDocument, stayDuration, username ?? "", null, mustChange: true);
+        await db.CommitAsync();
+        return r;
     }
 
     public async Task<GuestCreated> RegisterAsync(string fullName, string email, string phone, string address, string nationality, string idDocument, string username)
     {
         s.Require(Roles.Receptionist, Roles.Admin);
         await using var db = await Db.BeginAsync();
-        var r = await CreateGuestCoreAsync(db, s, fullName, email, phone, address, nationality, idDocument, username, null, mustChange: true);
+        var r = await CreateGuestCoreAsync(db, s, fullName, email, phone, address, nationality, "", idDocument, 1, username ?? "", null, mustChange: true);
         await db.CommitAsync();
         return r;
     }
@@ -163,12 +199,18 @@ public sealed class GuestService(Session s)
         address = Input.Optional(address, "Address", InputLimits.Address);
         nationality = Input.Optional(nationality, "Nationality", InputLimits.Nationality);
         idDocument = Input.Optional(idDocument, "ID document", InputLimits.IdDocument);
+        if (!string.IsNullOrEmpty(idDocument))
+            idDocument = Input.IdDocumentNumber(idDocument, HotelKeeper.Validation.Input.IdDocumentType.Other);
         if (phone.Length == 0 && email.Length == 0) throw new DomainException("Enter a phone number or an email address.");
         await using var db = await Db.BeginAsync();
-        var uid = await db.ScalarAsync<int?>("SELECT UserId FROM Guests WHERE Id=@id", new { id = guestId }) ?? throw new DomainException("Guest not found.");
+        var uid = await db.ScalarAsync<int?>("SELECT UserId FROM Guests WHERE Id=@id", new { id = guestId });
+        if (await db.ScalarAsync<int>("SELECT COUNT(*) FROM Guests WHERE Id=@id", new { id = guestId }) == 0)
+            throw new DomainException("Guest not found.");
+        if (uid == 0) uid = null;
         await db.ExecAsync("UPDATE Guests SET FullName=@f, Email=@e, Phone=@p, Address=@a, Nationality=@n, IdDocument=@i WHERE Id=@id",
             new { f = fullName, e = email, p = phone, a = address, n = nationality, i = idDocument, id = guestId });
-        await db.ExecAsync("UPDATE Users SET FullName=@f, Email=@e, Phone=@p WHERE Id=@u", new { f = fullName, e = email, p = phone, u = uid });
+        if (uid.HasValue)
+            await db.ExecAsync("UPDATE Users SET FullName=@f, Email=@e, Phone=@p WHERE Id=@u", new { f = fullName, e = email, p = phone, u = uid.Value });
         await Audit.LogAsync(db, s, "Guest updated", "Guest", guestId, fullName);
         await db.CommitAsync();
     }

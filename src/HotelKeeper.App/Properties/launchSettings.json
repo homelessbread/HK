@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "HotelKeeper.App (WPF)": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "HOTELKEEPER_SEED_DEV": "0"
+      }
+    }
+  }
+}

@@ -240,12 +240,18 @@ public static class SharedPages
 
         p.Act("Register guest", "user-plus", async () =>
         {
-            var f = await ctx.Dialogs.FormAsync("Register guest", "A sign-in account is created for the guest with a temporary password.", GuestFields(null), "Register");
+            var f = await ctx.Dialogs.FormAsync("Register guest", "Register guest as a record (no password/account).", GuestFields(null), "Register");
             if (f is null) return;
-            var c = await svc.RegisterAsync(f.Str("name"), f.Str("email"), f.Str("phone"), f.Str("addr"), f.Str("nat"), f.Str("id"), f.Str("user"));
-            await ctx.Dialogs.ShowLinesAsync("Guest registered", "Give these sign-in details to the guest. The password is shown only now.",
-                new[] { $"Username:  {c.Username}", $"Temporary password:  {c.TemporaryPassword}" });
-            p.StatusMessage = $"{f.Str("name")} was registered."; await p.ReloadAsync();
+            try
+            {
+                var stayDays = f.Int("stay");
+                var c = await svc.RegisterAsync(f.Str("name"), f.Str("email"), f.Str("phone"), f.Str("addr"), f.Str("nat"), f.Str("idtype"), f.Str("id"), stayDays, null);
+                p.StatusMessage = $"{f.Str("name")} was registered."; await p.ReloadAsync();
+            }
+            catch (Exception ex)
+            {
+                await ctx.Dialogs.MessageAsync("Registration failed", ErrorText.For(ex), true);
+            }
         });
 
         if (rec)
@@ -309,16 +315,48 @@ public static class SharedPages
             }, danger: true);
         return p;
 
-        static IReadOnlyList<FormField> GuestFields(GuestRow? g) => new[]
+        static IReadOnlyList<FormField> GuestFields(GuestRow? g)
         {
-            FormField.Txt("name", "Full name", g?.FullName, true, maxLength: InputLimits.FullName),
-            FormField.Txt("email", "Email", g?.Email, maxLength: InputLimits.Email),
-            FormField.Txt("phone", "Phone", g?.Phone, hint: "Phone or email is required.", maxLength: InputLimits.Phone),
-            FormField.Txt("addr", "Address", g?.Address, maxLength: InputLimits.Address),
-            FormField.Txt("nat", "Nationality", g?.Nationality, maxLength: InputLimits.Nationality),
-            FormField.Txt("id", "ID document", g?.IdDocument, maxLength: InputLimits.IdDocument),
-            g is null ? FormField.Txt("user", "Username", hint: "Optional. Generated from the name if left empty.", maxLength: InputLimits.Username) : FormField.InfoLine("Username", g.Username),
-        };
+            if (g is null)
+            {
+                var idTypes = new[]
+                {
+                    new Choice("Philippine National ID", "Philippine National ID"),
+                    new Choice("Passport", "Passport"),
+                    new Choice("Driver's License", "Driver's License"),
+                    new Choice("UMID", "UMID"),
+                    new Choice("PhilHealth ID", "PhilHealth ID"),
+                    new Choice("Postal ID", "Postal ID"),
+                    new Choice("Voter's ID", "Voter's ID"),
+                    new Choice("Other", "Other"),
+                };
+                return new[]
+                {
+                    FormField.Txt("name", "Full name", null, true, maxLength: InputLimits.FullName),
+                    FormField.Txt("phone", "Contact Number", null, hint: "Phone or email is required.", maxLength: InputLimits.Phone),
+                    FormField.Txt("email", "Email Address", null, maxLength: InputLimits.Email),
+                    FormField.Txt("addr", "Address", null, maxLength: InputLimits.Address),
+                    FormField.Combo("idtype", "ID Document Type", idTypes, "Philippine National ID"),
+                    FormField.Txt("id", "ID Document Number", null, maxLength: InputLimits.IdDocument),
+                    FormField.Int("stay", "Number of Days to Stay", 1, true, 1, 365),
+                };
+            }
+            else
+            {
+                return new[]
+                {
+                    FormField.Txt("name", "Full name", g.FullName, true, maxLength: InputLimits.FullName),
+                    FormField.Txt("email", "Email", g.Email, maxLength: InputLimits.Email),
+                    FormField.Txt("phone", "Phone", g.Phone, hint: "Phone or email is required.", maxLength: InputLimits.Phone),
+                    FormField.Txt("addr", "Address", g.Address, maxLength: InputLimits.Address),
+                    FormField.Txt("nat", "Nationality", g.Nationality, maxLength: InputLimits.Nationality),
+                    FormField.Txt("idtype", "ID Document Type", g.IdDocumentType, maxLength: 40),
+                    FormField.Txt("id", "ID Document", g.IdDocument, maxLength: InputLimits.IdDocument),
+                    FormField.InfoLine("Stay Duration (days)", g.StayDuration.ToString()),
+                    FormField.InfoLine("Username", string.IsNullOrEmpty(g.Username) ? "(No account)" : g.Username),
+                };
+            }
+        }
     }
 
     // ================================================================================== reservations & front desk

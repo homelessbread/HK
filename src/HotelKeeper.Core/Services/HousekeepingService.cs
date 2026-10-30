@@ -29,9 +29,10 @@ public sealed class HousekeepingService(Session s)
         search = Input.Search(search);
         var status = scope switch { "open" => "t.Status IN ('Pending','InProgress')", "done" => "t.Status IN ('Completed','Cancelled')", "all" => "1=1", _ => throw new DomainException("Choose a valid task view.") };
         var visible = s.Role == Roles.Housekeeper ? "AND (t.AssignedToId=@me OR (t.AssignedToId IS NULL AND t.Status='Pending'))" : "";
+        var dirtyOnly = s.Role == Roles.Receptionist ? "AND r.Status='Dirty'" : "";
         await using var db = await Db.OpenAsync();
         return await db.QueryAsync<TaskRow>(
-            Select + $"WHERE {status} {visible} AND (@q IS NULL OR r.RoomNumber LIKE @q) " +
+            Select + $"WHERE {status} {visible} {dirtyOnly} AND (@q IS NULL OR r.RoomNumber LIKE @q) " +
             "ORDER BY FIELD(t.Priority,'Urgent','High','Normal','Low'), t.CreatedAt LIMIT 500",
             new { me = s.UserId, q = string.IsNullOrWhiteSpace(search) ? null : "%" + search.Trim() + "%" });
     }
@@ -92,6 +93,8 @@ public sealed class HousekeepingService(Session s)
         await using var db = await Db.BeginAsync();
         var t = await LockAsync(db, taskId);
         if (t.Status is not (WorkStatus.Pending or WorkStatus.InProgress)) throw new DomainException("Only open tasks can be assigned.");
+        var roomStatus = await db.ScalarAsync<string>("SELECT Status FROM Rooms WHERE Id=@id", new { id = t.RoomId });
+        if (roomStatus != RoomStatus.Dirty) throw new DomainException("Housekeeping assignments are only allowed for Dirty rooms.");
         if (userId is not null &&
             await db.ScalarAsync<int>("SELECT COUNT(*) FROM Users u JOIN Roles r ON r.Id=u.RoleId WHERE u.Id=@id AND r.Name='Housekeeper' AND u.IsActive=1", new { id = userId }) == 0)
             throw new DomainException("Choose an active housekeeper.");

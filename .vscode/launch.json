@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "HotelKeeper (WPF)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-hotelkeeper",
+      "program": "${workspaceFolder}/src/HotelKeeper.App/bin/Debug/net8.0-windows/HotelKeeper.dll",
+      "cwd": "${workspaceFolder}/src/HotelKeeper.App/bin/Debug/net8.0-windows",
+      "console": "internalConsole",
+      "stopAtEntry": false
+    }
+  ]
+}

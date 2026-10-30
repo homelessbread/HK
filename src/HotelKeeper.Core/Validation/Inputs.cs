@@ -123,6 +123,38 @@ public static class Input
         return text;
     }
 
+    /// <summary>ID document types with the format their numbers must follow.</summary>
+    public enum IdDocumentType { Passport, NationalId, DriverLicense, IdCard, ResidentPermit, Other }
+
+    public static readonly string[] IdDocumentTypes = {"Passport","National ID","Driver license","ID card","Resident permit","Other"};
+
+    public static string IdDocumentNumber(string? value, IdDocumentType type)
+    {
+        var text = Required(value, "ID number", InputLimits.IdDocument);
+        text = text.Trim();
+        return type switch
+        {
+            IdDocumentType.Passport => text.Length >= 6 ? text.ToUpperInvariant() : "Passport numbers are at least 6 characters.",
+            IdDocumentType.NationalId => text.Length >= 7 ? text.ToUpperInvariant() : "National ID numbers are at least 7 characters.",
+            IdDocumentType.DriverLicense => ValidateLetterDigitDash(text, 12, 16, "Driver license"),
+            IdDocumentType.IdCard => ValidateLetterDigitDash(text, 8, 12, "ID card"),
+            IdDocumentType.ResidentPermit => ValidateLetterDigitDash(text, 9, 13, "Resident permit"),
+            IdDocumentType.Other => text,
+            _ => text
+        };
+    }
+
+    static string ValidateLetterDigitDash(string text, int min, int max, string field)
+    {
+        if (text.Length < min || text.Length > max)
+            throw new DomainException($"{field} must be {min}-{max} characters using letters, digits and single dashes.");
+        var segments = text.Split('-');
+        if (segments.Length > 3) throw new DomainException($"{field} may use at most two single dashes.");
+        foreach (var segment in segments)
+            if (segment.Length == 0) throw new DomainException($"{field} may not start, end or have two dashes next to each other.");
+        return text;
+    }
+
     public static string OneOf(string? value, IReadOnlyCollection<string> allowed, string field)
     {
         var text = Required(value, field, 1, 80);

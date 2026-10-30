@@ -33,31 +33,20 @@ public static class RoleShells
             new NavDefinition("Hotel", "bed", new[]
             {
                 Nav("rooms", "Rooms", "bed", () => SharedPages.Rooms(ctx, SharedPages.RoomMode.Manage)),
-                Nav("types", "Room types", "tag", () => SharedPages.RoomTypes(ctx)),
-                Nav("items", "Room items", "package", () => SharedPages.RoomItems(ctx)),
                 Nav("guests", "Guests", "users", () => SharedPages.Guests(ctx, "Guests", "Guest accounts and records. Changes are written to the audit log.")),
-                Nav("staff", "Staff & accounts", "shield", () => StaffPages.Staff(ctx)),
             }),
-            new NavDefinition("Operations", "clipboard", new[]
+            new NavDefinition("Room Operation", "settings", new[]
             {
-                Nav("status", "Room status", "activity", () => SharedPages.Rooms(ctx, SharedPages.RoomMode.Status)),
-                Nav("housekeeping", "Housekeeping", "sparkles", () => StaffPages.Housekeeping(ctx)),
-                Nav("requests", "Guest requests", "inbox", () => SharedPages.Requests(ctx)),
-                Nav("maintenance", "Maintenance reports", "wrench", () => SharedPages.Maintenance(ctx)),
-                Nav("stays", "Stays", "history", () => SharedPages.StayHistory(ctx, "Stays", "Every stay, from check-in to departure.")),
+                Nav("room-types", "Room Types", "tag", () => SharedPages.RoomTypes(ctx)),
+                Nav("room-desc", "Room Descriptions", "file-text", () => SharedPages.Rooms(ctx, SharedPages.RoomMode.Manage)),
+                Nav("room-pax", "Room Capacity (PAX)", "users", () => SharedPages.RoomTypes(ctx)),
+                Nav("room-items", "Room Items", "package", () => SharedPages.RoomItems(ctx)),
+                Nav("requestable-items", "Requestable Items", "list", () => StaffPages.ItemCatalog(ctx)),
             }),
             new NavDefinition("System", "settings", new[]
             {
-                Nav("catalog", "Requestable items", "list", () => StaffPages.ItemCatalog(ctx)),
-                Nav("checklist", "Cleaning checklist", "list-checks", () => StaffPages.ChecklistTemplate(ctx)),
-                Nav("audit", "Activity log", "scroll", () => StaffPages.AuditLog(ctx)),
-                Nav("settings", "Settings", "settings", () => StaffPages.Settings(ctx)),
-            }),
-            new NavDefinition("Archives", "archive", new[]
-            {
-                Nav("arch-rooms", "Room archive", "archive", () => SharedPages.Rooms(ctx, SharedPages.RoomMode.Manage, archivedOnly: true, title: "Room archive", description: "Archived rooms and their history. Nothing is ever deleted.")),
-                Nav("arch-requests", "Request archive", "archive", () => SharedPages.Requests(ctx, archiveView: true, title: "Request archive", description: "Archived guest requests.")),
-                Nav("arch-reports", "Report archive", "archive", () => SharedPages.Maintenance(ctx, archiveView: true, title: "Report archive", description: "Archived maintenance reports.")),
+                Nav("staff", "Staffs", "shield", () => StaffPages.Staff(ctx)),
+                Nav("maintenance", "Maintenance", "wrench", () => SharedPages.Maintenance(ctx)),
             }),
         });
     }
@@ -67,22 +56,20 @@ public static class RoleShells
         var d = new DashboardService(ctx.Session);
         return new ShellViewModel(ctx, name, new[]
         {
-            new NavDefinition("Front Desk", "concierge", new[]
+            new NavDefinition("Overview", "home", new[]
             {
                 Nav("dashboard", "Dashboard", "layout", () => new DashboardPageViewModel(ctx, "Front Desk", "Today's arrivals, departures and rooms.", d.ReceptionistAsync,
                     new[] { new QuickAction("Guest directory", "users", "guests"), new QuickAction("Room status", "bed", "rooms") })),
-                Nav("guests", "Guest", "users", () => SharedPages.Guests(ctx, "Guest", "Guest accounts and records.")),
+            }),
+            new NavDefinition("Hotel", "bed", new[]
+            {
                 Nav("rooms", "Rooms", "bed", () => SharedPages.Rooms(ctx, SharedPages.RoomMode.Status, title: "Rooms", description: "Room status and guest occupancy.")),
-            }),
-            new NavDefinition("Rooms & Services", "bed", new[]
-            {
+                Nav("guests", "Guests", "users", () => SharedPages.Guests(ctx, "Guests", "Guest accounts and records.")),
                 Nav("housekeeping", "Housekeeping", "sparkles", () => StaffPages.Housekeeping(ctx)),
-                Nav("requests", "Guest Request", "inbox", () => SharedPages.Requests(ctx, title: "Guest Request")),
-                Nav("maintenance", "Maintenance Reports", "wrench", () => SharedPages.Maintenance(ctx, title: "Maintenance Reports")),
             }),
-            new NavDefinition("Stays", "history", new[]
+            new NavDefinition("System", "settings", new[]
             {
-                Nav("stays", "Stays", "history", () => SharedPages.StayHistory(ctx, "Stays", "Current and past stays, check-ins and check-outs.")),
+                Nav("account", "Account", "user", () => SharedPages.Account(ctx)),
             }),
         });
     }
@@ -92,17 +79,18 @@ public static class RoleShells
         var d = new DashboardService(ctx.Session);
         return new ShellViewModel(ctx, name, new[]
         {
-            new NavDefinition("My work", "sparkles", new[]
+            new NavDefinition("Overview", "home", new[]
             {
                 Nav("dashboard", "Dashboard", "layout", () => new DashboardPageViewModel(ctx, "My day", "Rooms to clean and requests waiting for you.", d.HousekeeperAsync,
-                    new[] { new QuickAction("My cleaning tasks", "sparkles", "tasks"), new QuickAction("Item requests", "package", "requests") })),
-                Nav("tasks", "Cleaning tasks", "sparkles", () => StaffPages.Housekeeping(ctx)),
-                Nav("requests", "Cleaning & item requests", "package", () => SharedPages.Requests(ctx, title: "Cleaning & item requests", description: "Requests from guests for cleaning and supplies.", housekeepingOnly: true)),
-                Nav("problems", "Problem reports", "wrench", () => SharedPages.Maintenance(ctx, title: "Problem reports", description: "Report damage or unsafe rooms, and update the reports assigned to you.")),
+                    new[] { new QuickAction("My cleaning tasks", "sparkles", "tasks") })),
             }),
-            new NavDefinition("Rooms", "bed", new[]
+            new NavDefinition("Work", "sparkles", new[]
             {
-                Nav("rooms", "Room status", "bed", () => SharedPages.Rooms(ctx, SharedPages.RoomMode.View, title: "Room status", description: "Which rooms are dirty, being cleaned or ready.")),
+                Nav("tasks", "Tasks", "sparkles", () => StaffPages.Housekeeping(ctx)),
+            }),
+            new NavDefinition("Overview", "file-text", new[]
+            {
+                Nav("report", "Report", "wrench", () => SharedPages.Maintenance(ctx, title: "Report", description: "Report damage or unsafe rooms.")),
             }),
         });
     }
@@ -112,17 +100,13 @@ public static class RoleShells
         var d = new DashboardService(ctx.Session);
         return new ShellViewModel(ctx, name, new[]
         {
-            new NavDefinition("My stay", "bed", new[]
+            new NavDefinition("Guest", "user", new[]
             {
                 Nav("dashboard", "Dashboard", "layout", () => new DashboardPageViewModel(ctx, $"Welcome, {ctx.Session.FullName.Split(' ')[0]}", "Your stay and bookings at a glance.", d.GuestAsync,
-                    new[] { new QuickAction("Find a room", "search", "find"), new QuickAction("My requests", "inbox", "requests"), new QuickAction("My reservations", "calendar", "reservations") })),
-                Nav("find", "Find a room", "search", () => GuestPages.FindRoom(ctx)),
-                Nav("reservations", "My reservations", "calendar", () => GuestPages.MyReservations(ctx)),
-                Nav("requests", "My requests", "inbox", () => GuestPages.MyRequests(ctx)),
-            }),
-            new NavDefinition("Services", "concierge", new[]
-            {
-                Nav("room-info", "Room information", "key", () => GuestPages.RoomInformation(ctx)),
+                    new[] { new QuickAction("My requests", "inbox", "requests") })),
+                Nav("tasks", "Tasks", "list-checks", () => GuestPages.RoomInformation(ctx)),
+                Nav("room-info", "Room Info", "key", () => GuestPages.RoomInformation(ctx)),
+                Nav("requests", "Requests", "inbox", () => GuestPages.MyRequests(ctx)),
             }),
         });
     }
