@@ -1,0 +1,10 @@
+# Build output
+bin/
+obj/
+.vs/
+
+# Local machine secrets / overrides
+appsettings.local.json
+
+# Runtime logs
+*.log
