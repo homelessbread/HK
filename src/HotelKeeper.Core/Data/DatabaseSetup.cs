@@ -38,6 +38,10 @@ public static class DatabaseSetup
                 await m.ExecAsync("ALTER TABLE Guests ADD COLUMN IdDocumentType VARCHAR(40) NOT NULL DEFAULT '' AFTER Nationality");
             if (await ColumnMissingAsync(m, "Guests", "StayDuration"))
                 await m.ExecAsync("ALTER TABLE Guests ADD COLUMN StayDuration INT NOT NULL DEFAULT 0 AFTER IdDocument");
+            // A guest registered without a sign-in account is stored with UserId = NULL; older databases declared the column NOT NULL.
+            if (await m.ScalarAsync<int>(
+                    "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Guests' AND COLUMN_NAME='UserId' AND IS_NULLABLE='NO'") > 0)
+                await m.ExecAsync("ALTER TABLE Guests MODIFY COLUMN UserId INT NULL");
             await m.CommitAsync();
         }
 
