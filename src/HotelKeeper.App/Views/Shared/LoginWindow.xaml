@@ -9,11 +9,11 @@
             <Grid>
                 <StackPanel VerticalAlignment="Center">
                     <Border Width="52" Height="52" CornerRadius="14" Background="{StaticResource AccentBrush}" HorizontalAlignment="Left">
-                        <Path Data="{Binding Source=bed, Converter={StaticResource IconConv}}" Stroke="#242424" StrokeThickness="1.8" Width="26" Height="26" Stretch="Uniform"
+                        <Path Data="{Binding Source=bed, Converter={StaticResource IconConv}}" Stroke="{StaticResource MutedBrush}" StrokeThickness="1.8" Width="26" Height="26" Stretch="Uniform"
                               StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
                     </Border>
                     <TextBlock Text="Hotel Keeper" Foreground="White" FontSize="34" FontWeight="SemiBold" Margin="0,22,0,6"/>
-                    <TextBlock Text="Rooms, housekeeping, reservations and guest requests in one place." Foreground="#BDBDBD" FontSize="14" TextWrapping="Wrap"/>
+                    <TextBlock Text="Rooms, housekeeping, reservations and guest requests in one place." Foreground="{StaticResource MutedBrush}" FontSize="14" TextWrapping="Wrap"/>
                 </StackPanel>
             </Grid>
         </Border>

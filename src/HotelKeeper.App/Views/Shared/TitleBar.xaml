@@ -18,10 +18,10 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource RailHoverBrush}"/>
+                                <Setter TargetName="bd" Property="Background" Value="{StaticResource RailHoverBrush}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource SelectedBrush}"/>
+                                <Setter TargetName="bd" Property="Background" Value="{StaticResource SelectedBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -59,13 +59,13 @@
                    TextTrimming="CharacterEllipsis"/>
         <StackPanel Grid.Column="1" Orientation="Horizontal">
             <Button x:Name="MinButton" Style="{StaticResource CapBtn}" Click="Min_Click" ToolTip="Minimize">
-                <TextBlock Text="&#xE921;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="#E5E7EB"/>
+                <TextBlock Text="&#xE921;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource TextBrush}"/>
             </Button>
             <Button x:Name="MaxButton" Style="{StaticResource CapBtn}" Click="Max_Click" ToolTip="Maximize">
-                <TextBlock x:Name="MaxGlyph" Text="&#xE922;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="#E5E7EB"/>
+                <TextBlock x:Name="MaxGlyph" Text="&#xE922;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{DynamicResource TextBrush}"/>
             </Button>
             <Button Style="{StaticResource CloseBtn}" Click="Close_Click" ToolTip="Close">
-                <TextBlock Text="&#xE8BB;" FontFamily="Segoe MDL2 Assets" FontSize="11" Foreground="#E5E7EB"/>
+                <TextBlock Text="&#xE8BB;" FontFamily="Segoe MDL2 Assets" FontSize="11" Foreground="{DynamicResource TextBrush}"/>
             </Button>
         </StackPanel>
     </Grid>
